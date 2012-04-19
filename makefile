@@ -3,6 +3,10 @@ alz : alz.cpp *.hpp
 
 test_bitwriter : test_bitwriter.cpp *.hpp
 	g++ $< -o $@
+
+test_suffix : test_suffix.cpp *.hpp
+	g++ $< -o $@
+
 tests : test_bitwriter
 
 test1 : alz
@@ -35,3 +39,13 @@ test :
 	./alz c test.txt test.lz
 	./alz d test.lz test.dec.txt
 	diff test.txt test.dec.txt
+
+test_mild :
+	time ./alz c config.sub config.sub.comp
+	time ./alz d config.sub.comp config.sub.dec
+	diff config.sub config.sub.dec
+
+test_heavy :
+	time ./alz c displace.bin displace.bin.comp
+	time ./alz d displace.bin.comp displace.bin.dec
+	diff displace.bin displace.bin.dec
