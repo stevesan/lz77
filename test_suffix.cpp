@@ -9,7 +9,7 @@ int main( int argc, char** argv )
 {
 	vector<unsigned char> chars;
 
-	assert( argc > 1 );
+	assert( argc > 2 );
 
 	for( int i = 0; argv[1][i] != '\0'; i++ )
 	{
@@ -17,4 +17,14 @@ int main( int argc, char** argv )
 	}
 
 	SuffixTree tree( chars );
+	tree.add_all_remaining();
+	tree.output(cout);
+
+	vector<unsigned char> target;
+	for( int i = 0; argv[2][i] != '\0'; i++ )
+	{
+		target.push_back( argv[2][i] );
+	}
+	pair<int,int> rv = tree.find_longest_match( target );
+	cout << rv.first << " " << rv.second << endl;
 }

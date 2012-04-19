@@ -21,7 +21,7 @@ class SuffixTree
 {
 	public:
 
-		typedef pair<size_t, size_t> Substring;
+		typedef pair<int, int> Substring;
 
 		static bool is_empty_sub( const Substring& s )
 		{
@@ -32,7 +32,18 @@ class SuffixTree
 		{
 			public:
 				typedef pair< Substring, State* > Transition;
-				boost::unordered_map< T, Transition > transitions;
+				typedef boost::unordered_map< T, Transition > TransMap;
+				TransMap transitions;
+
+				static void output_trans( ostream& os, const vector<T>& chars, int last, const Transition& e )
+				{
+					Substring sub = e.first;
+					os << sub.first << "-" << sub.second << " ";
+					for( int i = sub.first; i <= sub.second; i++ )
+					{
+						os << chars[i];
+					}
+				}
 
 				bool is_leaf;
 
@@ -46,8 +57,16 @@ class SuffixTree
 				void add_transition( T c, const Transition& t )
 				{
 					assert( t.second != NULL );
+					//cout << "Adding transition for " << c << endl;
 					transitions[ c ] = t;
 					is_leaf = false;
+				}
+
+				typedef pair<bool, Transition> MaybeTrans;
+				MaybeTrans maybe_get_transition( T c )
+				{
+					Transition e = transitions[c];
+					return MaybeTrans( e.second != NULL, e );
 				}
 
 				bool has_transition( T c )
@@ -65,12 +84,17 @@ class SuffixTree
 					return transitions[c];
 				}
 
-				void output_dfs( ostream& os, const vector<T>& chars, size_t last, int depth )
+				void output_dfs( ostream& os, const vector<T>& chars, int last, int depth )
 				{
-					os << depth << " ";
-					for( int i = 0; i < depth; i++ )
+
+					BOOST_FOREACH( TransMap::value_type& kv, transitions )
 					{
-						cout << " ";
+						Transition& e = kv.second;
+						os << depth << " ";
+						for( int i = 0; i < depth; i++ ) cout << " ";
+						output_trans( os, chars, last, e );
+						os << endl;
+						e.second->output_dfs( os, chars, last, depth+1 );
 					}
 
 				}
@@ -80,10 +104,13 @@ class SuffixTree
 		const vector<T>& chars;
 		State* root;
 		State* bt;
+		State* outer_s;
+		int outer_k;
+		int curr_i;
 
-		typedef pair<State*, size_t> Suffix;
+		typedef pair<State*, int> Suffix;
 
-		Suffix canonize( State* s, size_t k, size_t p )
+		Suffix canonize( State* s, int k, int p )
 		{
 			if( p < k )
 				return Suffix( s, k );
@@ -91,8 +118,8 @@ class SuffixTree
 			State::Transition e = s->get_transition( chars[k] );
 			assert( e.second != NULL );
 			State* s1 = e.second;
-			size_t k1 = e.first.first;
-			size_t p1 = e.first.second;
+			int k1 = e.first.first;
+			int p1 = e.first.second;
 
 			while( (p1-k1) <= (p-k) )
 			{
@@ -112,15 +139,16 @@ class SuffixTree
 		}
 
 		typedef pair<bool,State*> TestSplitRet;
-		TestSplitRet test_and_split( State* s, size_t k, size_t p, T t )
+		TestSplitRet test_and_split( State* s, int k, int p, T t )
 		{
 			if( k <= p )
 			{
+				//cout << "Looking for " << chars[k] << endl;
 				State::Transition e = s->get_transition( chars[k] );
 				State* s1 = e.second;
 				assert( s1 != NULL );
-				size_t k1 = e.first.first;
-				size_t p1 = e.first.second;
+				int k1 = e.first.first;
+				int p1 = e.first.second;
 
 				if( t == chars[ k1+p-k+1 ] )
 					return TestSplitRet( true, s );
@@ -136,14 +164,14 @@ class SuffixTree
 				return TestSplitRet( s->has_transition(t), s );
 		}
 
-		Suffix update( State* s, size_t k, size_t i )
+		Suffix update( State* s, int k, int i )
 		{
 			State* oldr = root;
 			TestSplitRet tsr = test_and_split( s, k, i-1, chars[i] );
 			bool is_end = tsr.first;
 			State* r = tsr.second;
 
-			size_t inf = chars.size();
+			int inf = chars.size();
 
 			while( !is_end )
 			{
@@ -179,18 +207,92 @@ class SuffixTree
 			}
 
 			root->suf_link = bt;
-			State* s = root;
-			size_t k = 0;
+			outer_s = root;
+			outer_k = 0;
+			curr_i = 0;
+		}
 
-			for( int i = 0; i < chars.size(); i++ )
+		//----------------------------------------
+		//  Returns false if all done
+		//----------------------------------------
+		bool add_next_letter()
+		{
+			if( curr_i < chars.size() )
 			{
-				Suffix rv = update( s, k, i );
-				s = rv.first;
-				k = rv.second;
-				rv = canonize( s, k, i );
-				s = rv.first;
-				k = rv.second;
+				//cout << "Doing character " << chars[curr_i] << endl;
+				Suffix rv = update( outer_s, outer_k, curr_i );
+				outer_s = rv.first;
+				outer_k = rv.second;
+				rv = canonize( outer_s, outer_k, curr_i );
+				outer_s = rv.first;
+				outer_k = rv.second;
+
+				curr_i++;
+				return true;
 			}
+			else
+				return false;
+		}
+
+		void add_all_remaining()
+		{
+			while( add_next_letter() );
+		}
+
+		void output( ostream& os )
+		{
+			root->output_dfs( os, chars, curr_i-1, 0 );
+		}
+
+		//----------------------------------------
+		//  rv.first = index of longest match
+		//	rv.second = length of longest match
+		//----------------------------------------
+		pair<int,int> find_longest_match( const vector<T>& target )
+		{
+			int j = 0;	// index into target
+
+			State::MaybeTrans me = root->maybe_get_transition( target[j] );
+
+			// keep track of suffix start
+			int start = 0;
+			if( me.first )
+				start = me.second.first.first;
+
+			while( me.first )
+			{
+				State::Transition e = me.second;
+				Substring sub = e.first;
+
+				// found a transition starting with the next letter
+				// see how much we get
+				int i = 0;
+				for( i = sub.first; i <= sub.second && j < target.size(); i++ )
+				{
+					if( chars[i] == target[j] )
+						j++;
+					else
+						break;
+				}
+
+				// matched the whole thing?
+				if( j == target.size() )
+					break;
+
+				if( i > sub.second )
+				{
+					// we got all the way to the end of this edge!
+					// try finding the next edge
+					State* end = e.second;
+					assert( end != NULL );
+					me = end->maybe_get_transition( target[j] );
+				}
+				else
+					// didn't get to the end, we're done
+					break;
+			}
+
+			return pair<int,int>( start, j );
 		}
 };
 
