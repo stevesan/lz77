@@ -33,31 +33,38 @@ class SuffixTree
 			public:
 				typedef pair< Substring, State* > Transition;
 				typedef boost::unordered_map< T, Transition > TransMap;
+
+		private:
 				TransMap transitions;
+				bool is_leaf;
+
+		public:
 
 				static void output_trans( ostream& os, const vector<T>& chars, int last, const Transition& e )
 				{
 					Substring sub = e.first;
-					os << sub.first << "-" << sub.second << " ";
-					for( int i = sub.first; i <= sub.second; i++ )
+					os << sub.first << "-" << sub.second << " '";
+					for( int i = sub.first; i <= sub.second && i <= last; i++ )
 					{
 						os << chars[i];
 					}
+					os << "'";
 				}
-
-				bool is_leaf;
 
 				State* suf_link;
 
 				State() :
 					is_leaf( true ),
-					suf_link(NULL)
-			{}
+					suf_link(NULL),
+					transitions()
+				{
+//					transitions.clear();
+				}
 
 				void add_transition( T c, const Transition& t )
 				{
 					assert( t.second != NULL );
-					//cout << "Adding transition for " << c << endl;
+					//cout << "Adding transition for " << c << " obj = " << (void*)this << endl;
 					transitions[ c ] = t;
 					is_leaf = false;
 				}
@@ -65,13 +72,19 @@ class SuffixTree
 				typedef pair<bool, Transition> MaybeTrans;
 				MaybeTrans maybe_get_transition( T c )
 				{
-					Transition e = transitions[c];
-					return MaybeTrans( e.second != NULL, e );
+					TransMap::iterator iter = transitions.find(c);
+					if( iter == transitions.end() )
+						return MaybeTrans( false, Transition(Substring(0,0), NULL) );
+					else
+						return MaybeTrans( true, transitions[c] );
 				}
 
 				bool has_transition( T c )
 				{
-					return transitions.find(c) != transitions.end();
+					//cout << "Looking for transition to " << c << " |ts| = " << transitions.size() << " obj = " << (void*)this << endl;
+					bool found = transitions.find(c) != transitions.end();
+					//cout << "result = " << found << endl;
+					return found;
 				}
 
 				Transition get_transition( T c )
@@ -84,12 +97,12 @@ class SuffixTree
 					return transitions[c];
 				}
 
-				void output_dfs( ostream& os, const vector<T>& chars, int last, int depth )
+				void output_dfs( ostream& os, const vector<T>& chars, int last, int depth ) const
 				{
 
-					BOOST_FOREACH( TransMap::value_type& kv, transitions )
+					BOOST_FOREACH( const TransMap::value_type& kv, transitions )
 					{
-						Transition& e = kv.second;
+						const Transition& e = kv.second;
 						os << depth << " ";
 						for( int i = 0; i < depth; i++ ) cout << " ";
 						output_trans( os, chars, last, e );
@@ -204,12 +217,16 @@ class SuffixTree
 			{
 				bt->add_transition( chars[i],
 						State::Transition( Substring(i,i), root) );
+				//cout << "Added bt-> root transition for char '" << chars[i] << "'" << endl;
 			}
 
 			root->suf_link = bt;
 			outer_s = root;
 			outer_k = 0;
 			curr_i = 0;
+
+			// TEMP
+			root->has_transition('m');
 		}
 
 		//----------------------------------------
@@ -223,6 +240,7 @@ class SuffixTree
 				Suffix rv = update( outer_s, outer_k, curr_i );
 				outer_s = rv.first;
 				outer_k = rv.second;
+//				output(cout);
 				rv = canonize( outer_s, outer_k, curr_i );
 				outer_s = rv.first;
 				outer_k = rv.second;
@@ -236,10 +254,14 @@ class SuffixTree
 
 		void add_all_remaining()
 		{
-			while( add_next_letter() );
+			//output(cout);
+			while( add_next_letter() ) {
+				cout << "--" << endl;
+				output(cout);
+			}
 		}
 
-		void output( ostream& os )
+		void output( ostream& os ) const
 		{
 			root->output_dfs( os, chars, curr_i-1, 0 );
 		}
@@ -248,16 +270,12 @@ class SuffixTree
 		//  rv.first = index of longest match
 		//	rv.second = length of longest match
 		//----------------------------------------
-		pair<int,int> find_longest_match( const vector<T>& target )
+		pair<int,int> find_longest_match( const vector<T>& target ) const
 		{
 			int j = 0;	// index into target
 
 			State::MaybeTrans me = root->maybe_get_transition( target[j] );
-
-			// keep track of suffix start
-			int start = 0;
-			if( me.first )
-				start = me.second.first.first;
+			int last_char = -1;	// the last char we matched
 
 			while( me.first )
 			{
@@ -266,18 +284,25 @@ class SuffixTree
 
 				// found a transition starting with the next letter
 				// see how much we get
+				// make sure we don't go past the edge's bound
+				// and also make sure we don't go past the current last letter
 				int i = 0;
-				for( i = sub.first; i <= sub.second && j < target.size(); i++ )
+				for( i = sub.first; i <= sub.second && i < curr_i && j < target.size(); i++ )
 				{
 					if( chars[i] == target[j] )
+					{
+						last_char = i;
 						j++;
+					}
 					else
 						break;
 				}
 
 				// matched the whole thing?
 				if( j == target.size() )
+				{
 					break;
+				}
 
 				if( i > sub.second )
 				{
@@ -292,6 +317,8 @@ class SuffixTree
 					break;
 			}
 
+			// compute starting position by just backtracking from last char
+			int start = last_char - j + 1;
 			return pair<int,int>( start, j );
 		}
 };

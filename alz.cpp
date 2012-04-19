@@ -8,6 +8,7 @@
 
 #include "BitWriter.hpp"
 #include "BitReader.hpp"
+#include "SuffixTree.hpp"
 
 static const unsigned int NUM_DELTA_BITS = 12;
 static const unsigned int NUM_LEN_BITS = 4;
@@ -20,7 +21,7 @@ inline unsigned int get_max_delta()
 
 inline unsigned int get_max_copy_len()
 {
-	return (1 << NUM_LEN_BITS);
+	return (1 << NUM_LEN_BITS) - 1;
 }
 
 using namespace std;
@@ -58,7 +59,7 @@ int find_longest_match( const vector<BYTE>& pile, int pile_start, int pile_end, 
 //----------------------------------------
 //  Compression
 //----------------------------------------
-int compress_main( const string& infile, const string& outfile )
+int compress_main( const string& infile, const string& outfile, bool use_suffix_tree )
 {
 	//----------------------------------------
 	//  Read the whole file into the array at once
@@ -94,6 +95,7 @@ int compress_main( const string& infile, const string& outfile )
 	//----------------------------------------
 	BitWriter bw;
 
+	SuffixTree stree( bytes );
 	vector<BYTE> target( get_max_copy_len() );
 
 	for( int i = 0; i < bytes.size(); )
@@ -104,6 +106,7 @@ int compress_main( const string& infile, const string& outfile )
 		// copy the next target chunk
 		for( int j = 0; j < target_len; j++ )
 		{
+			assert( i+j < bytes.size() );
 			target[j] = bytes[i+j];
 		}
 
@@ -111,7 +114,20 @@ int compress_main( const string& infile, const string& outfile )
 		// but only look back 4096 bytes tops
 		int pile_start = max( (int)0, (int)(i-get_max_delta()-1) );
 		int best_len = -1;
-		int longest_match = find_longest_match( bytes, pile_start, i, target, best_len );
+		int longest_match = -1;
+		
+		if( use_suffix_tree )
+		{
+			pair<int,int> rv = stree.find_longest_match( target );
+			longest_match = rv.first;
+			best_len = rv.second;
+			//cout << "found i = " << longest_match << " best_len = " << best_len << endl;
+		}
+		else
+		{
+			// slow brute force
+			longest_match = find_longest_match( bytes, pile_start, i, target, best_len );
+		}
 
 		if( best_len >= 2 )
 		{
@@ -119,17 +135,36 @@ int compress_main( const string& infile, const string& outfile )
 			bw.write_bit( 1 );
 			unsigned int delta = i - longest_match - 1;
 			bw.write_bits( delta, NUM_DELTA_BITS );
-			bw.write_bits( (best_len-1), NUM_LEN_BITS );	// actually write as len-1, since we don't need 0 in this case
+			bw.write_bits( best_len, NUM_LEN_BITS );
+			cout << "copy " << delta << " " << best_len << endl;
 
 			// advance cursor past the length
 			i += best_len;
+			// and the suffix tree
+			if( use_suffix_tree )
+			{
+				for( int j = 0; j < best_len; j++ )
+				{
+					bool ok = stree.add_next_letter();
+					assert( ok );
+				}
+			}
 		}
 		else
 		{
 			// didn't find any. just output it
 			bw.write_bit( 0 );
 			bw.write_bits( bytes[i], 8 );
+
+			cout << "byte " << bytes[i] << endl;
+
+			// advance cursor and suffix tree
 			i++;
+			if( use_suffix_tree )
+			{
+				bool ok = stree.add_next_letter();
+				assert( ok );
+			}
 		}
 	}
 
@@ -172,9 +207,6 @@ int decompress_main( const string& infile, const string& outfile )
 				break;
 			}
 
-			// remember, we stored num_bytes-1
-			num_bytes++;
-
 			size_t copy_start = out.size()-1-delta;
 			size_t copy_end = copy_start + num_bytes;
 			if( copy_start > out.size() || copy_end > out.size() )
@@ -215,8 +247,8 @@ int main( int argc, char** argv )
 {
 	if( argc < 4 )
 	{
-		cerr << "Usage: " << argv[0] << " [c|d] infile outfile" << endl;
-		cerr << "[c|d] indicates whether to compress or decompress" << endl;
+		cerr << "Usage: " << argv[0] << " [c|d|s] infile outfile" << endl;
+		cerr << "[c|d|s] indicates whether to compress or decompress. 's' indicates slow 'brute force' compression." << endl;
 		return 1;
 	}
 
@@ -225,7 +257,10 @@ int main( int argc, char** argv )
 	string outfile( argv[3] );
 
 	if( mode == 'c' )
-		return compress_main( infile, outfile );
+		return compress_main( infile, outfile, true );
+	else if( mode == 's' )
+		// Use the 's'low compression method, just for testing
+		return compress_main( infile, outfile, false );
 	else
 		return decompress_main( infile, outfile );
 }

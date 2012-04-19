@@ -18,9 +18,19 @@ test1 : alz
 	./alz d mahi.lz mahi.dec.txt
 	diff mahi.txt mahi.dec.txt
 
+test2short : alz
+	echo "mahi mahi" > mahi.txt
+	./alz s mahi.txt mahi.lzslow
+	./alz c mahi.txt mahi.lz
+	diff mahi.lz mahi.lzslow
+	./alz d mahi.lz mahi.dec.txt
+	diff mahi.txt mahi.dec.txt
+
 test2 : alz
 	echo "mahi mahi mahifd fd" > mahi.txt
+	./alz s mahi.txt mahi.lzslow
 	./alz c mahi.txt mahi.lz
+	diff mahi.lz mahi.lzslow
 	./alz d mahi.lz mahi.dec.txt
 	diff mahi.txt mahi.dec.txt
 
@@ -44,11 +54,15 @@ test :
 	diff test.txt test.dec.txt
 
 test_mild :
-	time ./alz c config.sub config.sub.comp
-	time ./alz d config.sub.comp config.sub.dec
+	./alz c config.sub config.sub.comp
+	./alz s config.sub config.sub.compslow
+#diff config.sub.comp config.sub.compslow
+	./alz d config.sub.comp config.sub.dec
 	diff config.sub config.sub.dec
 
 test_heavy :
 	time ./alz c displace.bin displace.bin.comp
 	time ./alz d displace.bin.comp displace.bin.dec
 	diff displace.bin displace.bin.dec
+
+all : alz test_suffix
