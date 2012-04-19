@@ -8,22 +8,12 @@ class BitReader
 {
 	private:
 
-		std::vector<unsigned char> bytes;
+		std::vector<BYTE> bytes;
 		unsigned int next_bit;
 
 	public:
 
-		BitReader() :
-			next_bit(0)
-		{
-		}
-
-		void reset()
-		{
-			next_bit = 0;
-		}
-
-		bool load_binary( const std::string& fname )
+		static bool load_bytes_binary( std::vector<BYTE>& bytes, const std::string& fname )
 		{
 			std::ifstream fin( fname.c_str(), std::ios::binary );
 			if( !fin.good() )
@@ -37,7 +27,7 @@ class BitReader
 
 				while( true )
 				{
-					unsigned char byte;
+					BYTE byte;
 					fin.read( (char*)&byte, sizeof(byte) );
 
 					if( fin.eof() )
@@ -50,7 +40,21 @@ class BitReader
 				std::cout << "OK Loaded " << bytes.size() << " bytes from " << fname << std::endl;
 				return true;
 			}
-			
+		}
+
+		BitReader() :
+			next_bit(0)
+		{
+		}
+
+		void reset()
+		{
+			next_bit = 0;
+		}
+
+		bool load_binary( const std::string& fname )
+		{
+			return load_bytes_binary( bytes, fname );
 		}
 
 		//----------------------------------------
@@ -72,13 +76,11 @@ class BitReader
 		template <typename T>
 		bool read_bits( T& out, unsigned int num_places )
 		{
-			for( int i = 0; i < std::min((long unsigned int)num_places, 8*sizeof(T)); i++ )
+			for( int i = 0; i < std::min((size_t)num_places, 8*sizeof(T)); i++ )
 			{
 				bool val;
 				if( read_bit( val ) )
 				{
-					std::cout << "read " << val << std::endl;
-
 					BitWriter::set_bit( out, i, val );
 				}
 				else

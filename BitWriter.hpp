@@ -8,6 +8,8 @@
 #include <cassert>
 #include <cmath>
 
+typedef unsigned char BYTE;
+
 //----------------------------------------
 //  Facilitates bit-level output
 //----------------------------------------
@@ -15,7 +17,7 @@ class BitWriter
 {
 	private:
 
-		std::vector<unsigned char> bytes;
+		std::vector<BYTE> bytes;
 		int next_bit;
 
 	public:
@@ -55,6 +57,27 @@ class BitWriter
 			return s.str();
 		}
 
+		static bool save_bytes_binary( const std::vector<BYTE>& bytes, const std::string& fname )
+		{
+			std::ofstream fout( fname.c_str(), std::ios::binary );
+			if( !fout.good() )
+			{
+				std::cerr << "** Could not open file for write '" << fname << "'" << std::endl;
+				return false;
+			}
+			else
+			{
+				for( int i = 0; i < bytes.size(); i++ )
+				{
+					fout.write( (char*)&bytes[i], sizeof( bytes[i] ) );
+				}
+			
+				fout.close();
+				std::cout << "OK Saved " << bytes.size() << " bytes to " << fname << std::endl;
+				return true;
+			}
+		}
+
 		void to_ascii( std::ostream& os )
 		{
 			for( int i = 0; i < bytes.size(); i++ )
@@ -81,23 +104,8 @@ class BitWriter
 
 		bool save_binary( const std::string& fname )
 		{
-			std::ofstream fout( fname.c_str(), std::ios::binary );
-			if( !fout.good() )
-			{
-				std::cerr << "** Could not open file for write '" << fname << "'" << std::endl;
-				return false;
-			}
-			else
-			{
-				for( int i = 0; i < bytes.size(); i++ )
-				{
-					fout.write( (char*)&bytes[i], sizeof( bytes[i] ) );
-				}
-			
-				fout.close();
-				std::cout << "OK Saved " << bytes.size() << " bytes to " << fname << std::endl;
-				return true;
-			}
+			std::cout << "Saving " << next_bit << " bits to " << fname << std::endl;
+			return save_bytes_binary( bytes, fname );
 		}
 
 		//----------------------------------------
@@ -106,7 +114,7 @@ class BitWriter
 		template <typename T>
 		void write_bits( T value, unsigned int num_places )
 		{
-			for( int i = 0; i < std::min((long unsigned int)num_places, 8*sizeof(T)); i++ )
+			for( int i = 0; i < std::min((size_t)num_places, 8*sizeof(T)); i++ )
 			{
 				write_bit( get_bit( value, i ) );
 			}

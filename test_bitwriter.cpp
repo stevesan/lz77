@@ -12,7 +12,7 @@ int main( int argc, char** argv )
 	unsigned int val = atoi(argv[1]);
 	unsigned int nplaces = atoi(argv[2]);
 
-
+	bw.write_bits( val, nplaces );
 	bw.write_bits( val, nplaces );
 	bw.to_ascii( cout );
 	bw.save_binary( "test.bin" );
@@ -20,10 +20,12 @@ int main( int argc, char** argv )
 	BitReader br;
 	br.load_binary( "test.bin" );
 
-	val = 0;
-	bool ok = br.read_bits( val, nplaces );
-	if( ok ) 
-		cout << "Read back val = " << val << endl;
-	else
-		cout << "Couldn't read back.." << endl;
+	while( true )
+	{
+		unsigned int read_val = 0;
+		bool ok = br.read_bits( read_val, nplaces );
+		if( !ok ) break;
+		assert( read_val == val );
+		cout << "Read back val = " << read_val << endl;
+	}
 }
