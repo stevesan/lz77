@@ -7,6 +7,9 @@ test_bitwriter : test_bitwriter.cpp *.hpp
 test_suffix : test_suffix.cpp *.hpp
 	g++ $< -o $@
 
+test_hashmap : test_hashmap.cpp
+	g++ $< -o $@
+
 tests : test_bitwriter
 
 test1 : alz

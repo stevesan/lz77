@@ -9,10 +9,12 @@ int main( int argc, char** argv )
 {
 	vector<unsigned char> chars;
 
+	assert( argc > 1 );
+
 	for( int i = 0; argv[1][i] != '\0'; i++ )
 	{
 		chars.push_back( argv[1][i] );
 	}
 
-	SuffixTree<unsigned char> tree( chars );
+	SuffixTree tree( chars );
 }

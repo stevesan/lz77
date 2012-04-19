@@ -2,6 +2,7 @@
 //----------------------------------------
 //  Implementation of linear-time online suffix tree construction
 //	Algorithm from [Ukkonen 1995]
+//	Basically a port of the javascript version in view-source:http://www.allisons.org/ll/AlgDS/Tree/Suffix/
 //----------------------------------------
 
 #ifndef __SUFFIXTREE_HEADER_GUARD__
@@ -9,217 +10,188 @@
 
 #include <vector>
 #include <cassert>
+#include <utility>
+#include <boost/unordered_map.hpp>
+#include <boost/foreach.hpp>
 
 using namespace std;
 
-template <typename T>
+typedef unsigned char T;
 class SuffixTree
 {
 	public:
 
-		class Edge
+		typedef pair<size_t, size_t> Substring;
+
+		static bool is_empty_sub( const Substring& s )
+		{
+			return s.second < s.first;
+		}
+
+		class State
 		{
 			public:
+				typedef pair< Substring, State* > Transition;
+				boost::unordered_map< T, Transition > transitions;
 
-				vector<Edge*> children;
-				size_t first_id;
-				size_t num_chars;
+				bool is_leaf;
 
-				Edge* next_smaller_edge;
+				State* suf_link;
 
-				Edge() :
-					first_id(0), num_chars(0), next_smaller_edge(NULL)
-			{
-			}
+				State() :
+					is_leaf( true ),
+					suf_link(NULL)
+			{}
 
-				Edge( size_t _first, size_t _num ) :
-					first_id( _first ),
-					num_chars( _num ),
-					next_smaller_edge(NULL)
+				void add_transition( T c, const Transition& t )
 				{
+					assert( t.second != NULL );
+					transitions[ c ] = t;
+					is_leaf = false;
 				}
 
-				bool is_leaf() { return children.size() == 0; }
-				bool is_empty() { return num_chars == 0; }
-				size_t get_last_id() { return first_id + num_chars - 1; }
-
-				void add_child( Edge* e ) { children.push_back(e); }
-
-				void output_dfs( ostream& os, const vector<T>& chars, int last, int depth = 0 )
+				bool has_transition( T c )
 				{
-					os << depth << ": ";
+					return transitions.find(c) != transitions.end();
+				}
+
+				Transition get_transition( T c )
+				{
+					if( !has_transition(c) )
+					{
+						cerr << "Could not find transition for " << c << endl;
+						assert(false);
+					}
+					return transitions[c];
+				}
+
+				void output_dfs( ostream& os, const vector<T>& chars, size_t last, int depth )
+				{
+					os << depth << " ";
 					for( int i = 0; i < depth; i++ )
 					{
-						os << " ";
+						cout << " ";
 					}
 
-					for( int i = 0; i < (is_leaf()? last-first_id+1 : num_chars); i++ )
-					{
-						os << chars[ first_id + i ];
-					}
-					os << endl;
-
-					for( int i = 0; i < children.size(); i++ )
-					{
-						children[i]->output_dfs( os, chars, last, depth+1 );
-					}
-
-				}
-		};
-
-		class Suffix
-		{
-			public:
-
-				Edge* edge;
-				size_t last_id;
-
-				Suffix() : edge( NULL ), last_id(0)
-			{
-			}
-
-				void set( Edge* _edge, size_t _last_id )
-				{
-					edge = _edge;
-					last_id = _last_id;
-				}
-
-				bool is_implicit_node() { return last_id < edge->get_last_id(); }
-				bool is_explicit_node(size_t curr_end) {
-					if( edge->is_empty() ) return true;
-
-					if( edge->is_leaf() )
-					{
-						return( last_id == curr_end );
-					}
-					else
-						return last_id == edge->get_last_id();
-				}
-				bool is_empty() { return edge->is_empty(); }
-
-				void move_to_next_smaller_suffix()
-				{
-					edge = edge->next_smaller_edge;
-					if( edge == NULL )
-					{
-						throw new std::runtime_error("No pointer to smaller suffix!");
-					}
-					last_id = edge->first_id;
 				}
 
 		};
 
 		const vector<T>& chars;
-		Edge* root;
-		Suffix active_point;
+		State* root;
+		State* bt;
+
+		typedef pair<State*, size_t> Suffix;
+
+		Suffix canonize( State* s, size_t k, size_t p )
+		{
+			if( p < k )
+				return Suffix( s, k );
+
+			State::Transition e = s->get_transition( chars[k] );
+			assert( e.second != NULL );
+			State* s1 = e.second;
+			size_t k1 = e.first.first;
+			size_t p1 = e.first.second;
+
+			while( (p1-k1) <= (p-k) )
+			{
+					k += p1 - k1 + 1;
+					s = s1;
+					if( k <= p )
+					{
+						e = s->get_transition( chars[k] );
+						assert( e.second != NULL );
+						s1 = e.second;
+						k1 = e.first.first;
+						p1 = e.first.second;
+					}
+			}
+
+			return Suffix( s, k );
+		}
+
+		typedef pair<bool,State*> TestSplitRet;
+		TestSplitRet test_and_split( State* s, size_t k, size_t p, T t )
+		{
+			if( k <= p )
+			{
+				State::Transition e = s->get_transition( chars[k] );
+				State* s1 = e.second;
+				assert( s1 != NULL );
+				size_t k1 = e.first.first;
+				size_t p1 = e.first.second;
+
+				if( t == chars[ k1+p-k+1 ] )
+					return TestSplitRet( true, s );
+				else
+				{
+					State* r = new State();
+					s->add_transition( chars[k1], State::Transition( Substring(k1, k1+p-k), r) );
+					r->add_transition( chars[k1+p-k+1], State::Transition( Substring( k1+p-k+1, p1 ), s1) );
+					return TestSplitRet( false, r );
+				}
+			}
+			else
+				return TestSplitRet( s->has_transition(t), s );
+		}
+
+		Suffix update( State* s, size_t k, size_t i )
+		{
+			State* oldr = root;
+			TestSplitRet tsr = test_and_split( s, k, i-1, chars[i] );
+			bool is_end = tsr.first;
+			State* r = tsr.second;
+
+			size_t inf = chars.size();
+
+			while( !is_end )
+			{
+				r->add_transition( chars[i], State::Transition( Substring(i, inf), new State() ) );
+				if( oldr != root )
+					oldr->suf_link = r;
+
+				oldr = r;
+				Suffix suf = canonize( s->suf_link, k, i-1 );
+				s = suf.first; k = suf.second;
+				tsr = test_and_split( s, k, i-1, chars[i] );
+				is_end = tsr.first;
+				r = tsr.second;
+			}
+
+			if( oldr != root )
+				oldr->suf_link = s;
+
+			return Suffix( s, k );
+		}
 
 		SuffixTree( const vector<T>& _chars ) :
-			chars( _chars ),
-			root( NULL )
+			chars(_chars)
 		{
-			root = new Edge;
-			active_point.set( root, 0 );
+			root = new State();
+			bt = new State();
 
-			// build
-			for( size_t i = 0; i < chars.size(); i++ )
+			// create transitions for all posible chars..
+			for( int i = 0; i < chars.size(); i++ )
 			{
-				update( i );
-
-				cout << "--------------" << endl;
-				root->output_dfs( cout, chars, i );
-			}
-		}
-
-		bool edge_starts_with( Edge* e, T c )
-		{
-			if( e->is_empty() )
-				return false;
-			assert( e->first_id < chars.size() );
-			return chars[ e->first_id ] == c;
-		}
-
-		//----------------------------------------
-		//  TODO - should optimize with hash table
-		//----------------------------------------
-		Edge* get_child_starting_with( Edge* e, T c )
-		{
-			for( int i = 0; i < e->children.size(); i++ )
-			{
-				if( edge_starts_with( e->children[i], c ) )
-					return e->children[i];
-			}
-			return NULL;
-		}
-
-		void update( size_t next_id )
-		{
-			T next_char = chars[ next_id ];
-			Suffix suffix = active_point;
-			Edge* last_leaf_parent = active_point.edge;
-
-			while( true )
-			{
-				if( suffix.is_explicit_node(next_id) )
-				{
-					Edge* match_child = get_child_starting_with( suffix.edge, next_char );
-					if( match_child == NULL )
-					{
-						// create leaf
-						suffix.edge->add_child( new Edge( next_id, 1 ) );
-
-						// update suffix pointers
-						if( last_leaf_parent != NULL )
-							last_leaf_parent->next_smaller_edge = suffix.edge;
-						last_leaf_parent = suffix.edge;
-					}
-					else
-					{
-						// done!
-						suffix.edge = match_child;
-						suffix.last_id = match_child->first_id;
-						break;
-					}
-				}
-				else
-				{
-					// check next character of the implicit node
-					if( chars[ suffix.last_id+1 ] != next_char )
-					{
-						// need to split
-						Edge* e = suffix.edge;
-						Edge* f = new Edge( suffix.last_id+1, e->get_last_id()-suffix.last_id );
-
-						// shorten original edge
-						e->num_chars = suffix.last_id - e->first_id + 1;
-
-						// add latter part
-						e->add_child( f );
-
-						// create new edge with new character
-						Edge* n = new Edge( next_id, 1 );
-						e->add_child( n );
-
-						// update suffix pointers
-						if( last_leaf_parent != NULL )
-							last_leaf_parent->next_smaller_edge = e;
-						last_leaf_parent = e;
-					}
-					else
-					{
-						suffix.last_id++;
- 						break;
-					}
-				}
-
-				if( suffix.is_empty() )
-					break;
-				else
-					suffix.move_to_next_smaller_suffix();
+				bt->add_transition( chars[i],
+						State::Transition( Substring(i,i), root) );
 			}
 
-			active_point = suffix;
-		}
+			root->suf_link = bt;
+			State* s = root;
+			size_t k = 0;
 
+			for( int i = 0; i < chars.size(); i++ )
+			{
+				Suffix rv = update( s, k, i );
+				s = rv.first;
+				k = rv.second;
+				rv = canonize( s, k, i );
+				s = rv.first;
+				k = rv.second;
+			}
+		}
 };
 
 
