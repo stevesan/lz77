@@ -26,6 +26,6 @@ int main( int argc, char** argv )
 	{
 		target.push_back( argv[2][i] );
 	}
-	pair<int,int> rv = tree.find_longest_match( target );
+	pair<int,int> rv = tree.find_longest_match_after( target, 0 );
 	cout << rv.first << " " << rv.second << endl;
 }

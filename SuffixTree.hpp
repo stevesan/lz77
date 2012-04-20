@@ -346,63 +346,6 @@ class SuffixTree
 		//----------------------------------------
 		//  rv.first = index of longest match
 		//	rv.second = length of longest match
-		//	This returns the position of the FIRST occurence of the longest.
-		//	Kind of useless for our compression problem...
-		//----------------------------------------
-		pair<int,int> find_longest_match( const vector<T>& target ) const
-		{
-			int j = 0;	// index into target
-
-			Node::Edge* e = root->get_edge( target[j] );
-			int last_char = -1;	// the last char we matched
-
-			while( e != NULL )
-			{
-				Substring sub = e->get_sub();
-
-				// found a transition starting with the next letter
-				// see how much we get
-				// make sure we don't go past the edge's bound
-				// and also make sure we don't go past the current last letter
-				int i = 0;
-				for( i = sub.first; i <= sub.second && i < curr_i && j < target.size(); i++ )
-				{
-					if( chars[i] == target[j] )
-					{
-						last_char = i;
-						j++;
-					}
-					else
-						break;
-				}
-
-				// matched the whole thing?
-				if( j == target.size() )
-				{
-					break;
-				}
-
-				if( i > sub.second )
-				{
-					// we got all the way to the end of this edge!
-					// try finding the next edge
-					Node* end = e->get_end();
-					assert( end != NULL );
-					e = end->get_edge( target[j] );
-				}
-				else
-					// didn't get to the end, we're done
-					break;
-			}
-
-			// compute starting position by just backtracking from last char
-			int start = last_char - j + 1;
-			return pair<int,int>( start, j );
-		}
-
-		//----------------------------------------
-		//  rv.first = index of longest match
-		//	rv.second = length of longest match
 		//	This returns the position of the LATEST occurrence of the longest, only if it's after the given min_pos
 		//	Kind of useless for our compression problem...
 		//----------------------------------------
@@ -467,61 +410,6 @@ class SuffixTree
 
 				return pair<int,int>( best_pos, best_len );
 		}
-
-#if 0
-		pair<int,int> find_longest_occurence_after( const vector<T>& target, int min_start ) const
-		{
-			int j = 0;	// index into target
-
-			Node::MaybeTrans me = root->maybe_get_transition( target[j] );
-			int best_len = -1;
-			int best_start = -1;
-
-			while( me.first )
-			{
-				Node::Transition e = me.second;
-				Substring sub = e.first;
-
-				// found a transition starting with the next letter
-				// see how much we get
-				// make sure we don't go past the edge's bound
-				// and also make sure we don't go past the current last letter
-				int i = 0;
-				for( i = sub.first; i <= sub.second && i < curr_i && j < target.size(); i++ )
-				{
-					if( chars[i] == target[j] )
-					{
-						last_char = i;
-						j++;
-					}
-					else
-						break;
-				}
-
-				// matched the whole thing?
-				if( j == target.size() )
-				{
-					break;
-				}
-
-				if( i > sub.second )
-				{
-					// we got all the way to the end of this edge!
-					// try finding the next edge
-					Node* end = e.second;
-					assert( end != NULL );
-					me = end->maybe_get_transition( target[j] );
-				}
-				else
-					// didn't get to the end, we're done
-					break;
-			}
-
-			// compute starting position by just backtracking from last char
-			int start = last_char - j + 1;
-			return pair<int,int>( best_start, best_len );
-		}
-#endif
 };
 
 

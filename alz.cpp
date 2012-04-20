@@ -259,7 +259,7 @@ int main( int argc, char** argv )
 	if( argc < 4 )
 	{
 		cerr << "Usage: " << argv[0] << " [c|d|s] infile outfile" << endl;
-		cerr << "[c|d|s] indicates whether to compress or decompress. 's' indicates slow 'brute force' compression." << endl;
+		cerr << "[c|d|s] indicates whether to compress or decompress. 's' indicates slow 'brute force' compression, just for testing." << endl;
 		return 1;
 	}
 
