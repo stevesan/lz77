@@ -39,7 +39,9 @@ class SuffixTree
 				{
 						Substring sub;
 						Node* end;
-						map< int, int > latest_occurr;
+						
+						typedef map<int,int> OccurMap;
+						OccurMap last_occur;
 
 					public:
 
@@ -61,8 +63,8 @@ class SuffixTree
 							assert( first_pos >= sub.first );
 							assert( first_pos <= sub.second );
 
-							map<int,int>::const_iterator it = latest_occurr.find( first_pos );
-							if( it != latest_occurr.end() )
+							map<int,int>::const_iterator it = last_occur.find( first_pos );
+							if( it != last_occur.end() )
 							{
 								return it->second;
 							}
@@ -75,8 +77,43 @@ class SuffixTree
 						{
 							// make sure it's actually later
 							if( latest_idx > get_latest_occurrence(first_pos) )
-								latest_occurr[ first_pos ] = latest_idx;
+								last_occur[ first_pos ] = latest_idx;
 						}
+
+						//----------------------------------------
+						//  Splits this edge at the given position and returns the new mid-node
+						//  Most importantly, it splits the last_occur map as well
+						//  'pos' should be given as the last position of the first split-part
+						//----------------------------------------
+						Node* split( int pos, const vector<T>& chars )
+						{
+							Node* m = new Node();
+
+							// create child
+							Edge* child = new Edge( Substring( pos+1, sub.second ), get_end() );
+							
+							// adjust self
+							sub.second = pos;
+							end = m;
+
+							// split the last_occur map
+							OccurMap all = last_occur;
+							last_occur.clear();
+							BOOST_FOREACH( const OccurMap::value_type& pair, all )
+							{
+								int first_pos = pair.first;
+								int last_pos = pair.second;
+								if( first_pos <= pos )
+									last_occur[ first_pos ] = last_pos;
+								else
+									child->last_occur[ first_pos ] = last_pos;
+							}
+
+							// put stuff together
+							m->add_edge( chars[pos+1], child );
+							return m;
+						}
+
 				};
 
 				typedef boost::unordered_map< T, Edge* > EdgeMap;
@@ -116,7 +153,13 @@ class SuffixTree
 				void add_edge( T c, Edge* t )
 				{
 					assert( t->get_end() != NULL );
-					//cout << "Adding transition for " << c << " obj = " << (void*)this << endl;
+
+					// delete old edge if it exist
+					Edge* old = get_edge(c);
+					if( old != NULL )
+						delete old;
+
+					// replace
 					edges[ c ] = t;
 					is_leaf = false;
 				}
@@ -200,10 +243,8 @@ class SuffixTree
 					return TestSplitRet( true, s );
 				else
 				{
-					Node* r = new Node();
-					s->add_edge( chars[k1], new Node::Edge( Substring(k1, k1+p-k), r ) );
-					r->add_edge( chars[k1+p-k+1], new Node::Edge( Substring( k1+p-k+1, p1 ), s1) );
-					return TestSplitRet( false, r );
+					Node* split_node = e->split( k1+p-k, chars );
+					return TestSplitRet( false, split_node );
 				}
 			}
 			else
@@ -237,29 +278,6 @@ class SuffixTree
 				oldr->suf_link = s;
 
 			return Suffix( s, k );
-		}
-
-	public:
-
-		SuffixTree( const vector<T>& _chars, int _max_search_len ) :
-			chars(_chars),
-			max_search_len( _max_search_len )
-		{
-			root = new Node();
-			bt = new Node();
-
-			// create edges for all posible chars..
-			for( int i = 0; i < chars.size(); i++ )
-			{
-				bt->add_edge( chars[i],
-						new Node::Edge( Substring(i,i), root ) );
-				//cout << "Added bt-> root transition for char '" << chars[i] << "'" << endl;
-			}
-
-			root->suf_link = bt;
-			outer_s = root;
-			outer_k = 0;
-			curr_i = 0;
 		}
 
 		//----------------------------------------
@@ -301,6 +319,29 @@ class SuffixTree
 				e->update_latest_occurrence( first_pos, end );
 				
 			}
+		}
+
+	public:
+
+		SuffixTree( const vector<T>& _chars, int _max_search_len ) :
+			chars(_chars),
+			max_search_len( _max_search_len )
+		{
+			root = new Node();
+			bt = new Node();
+
+			// create edges for all posible chars..
+			for( int i = 0; i < chars.size(); i++ )
+			{
+				bt->add_edge( chars[i],
+						new Node::Edge( Substring(i,i), root ) );
+				//cout << "Added bt-> root transition for char '" << chars[i] << "'" << endl;
+			}
+
+			root->suf_link = bt;
+			outer_s = root;
+			outer_k = 0;
+			curr_i = 0;
 		}
 
 		//----------------------------------------
