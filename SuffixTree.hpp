@@ -43,7 +43,7 @@ class SuffixTree
 
 					public:
 
-						Edge( Substring& _sub, Node* _end ) :
+						Edge( Substring _sub, Node* _end ) :
 							sub(_sub),
 							end( _end )
 						{
@@ -54,28 +54,28 @@ class SuffixTree
 						Substring get_sub() const { return sub; }
 
 						//----------------------------------------
-						//  Returns the index of the latest occurrence of the implicit node (ie. a substring) given by the first occurrence index 'first_idx'
+						//  Returns the index of the latest occurrence of the implicit node (ie. a substring) given by the first occurrence position 'first_pos'
 						//----------------------------------------
-						int get_latest_occurrence( int first_idx )
+						int get_latest_occurrence( int first_pos ) const
 						{
-							assert( first_idx >= sub.first );
-							assert( first_idx <= sub.second );
+							assert( first_pos >= sub.first );
+							assert( first_pos <= sub.second );
 
-							map<int,int>::iterator it = latest_occurr.find( first_idx );
+							map<int,int>::const_iterator it = latest_occurr.find( first_pos );
 							if( it != latest_occurr.end() )
 							{
 								return it->second;
 							}
 							else
 								// there has only been one occurrence so far
-								return first_idx;
+								return first_pos;
 						}
 
-						void update_latest_occurrence( int first_idx, int latest_idx )
+						void update_latest_occurrence( int first_pos, int latest_idx )
 						{
 							// make sure it's actually later
-							if( latest_idx > get_latest_occurrence(first_idx) )
-								latest_occurr[ first_idx ] = latest_idx;
+							if( latest_idx > get_latest_occurrence(first_pos) )
+								latest_occurr[ first_pos ] = latest_idx;
 						}
 				};
 
@@ -95,7 +95,13 @@ class SuffixTree
 					{
 						os << chars[i];
 					}
-					os << "'";
+					os << "' ";
+
+					// output latest occurrences
+					for( int i = sub.first; i <= sub.second && i <= last; i++ )
+					{
+						os << chars[i] << "," << e->get_latest_occurrence(i) << " ";
+					}
 				}
 
 				Node* suf_link;
@@ -147,6 +153,7 @@ class SuffixTree
 		Node* outer_s;
 		int outer_k;
 		int curr_i;
+		int max_search_len;
 
 		Suffix canonize( Node* s, int k, int p )
 		{
@@ -234,8 +241,9 @@ class SuffixTree
 
 	public:
 
-		SuffixTree( const vector<T>& _chars ) :
-			chars(_chars)
+		SuffixTree( const vector<T>& _chars, int _max_search_len ) :
+			chars(_chars),
+			max_search_len( _max_search_len )
 		{
 			root = new Node();
 			bt = new Node();
@@ -255,6 +263,47 @@ class SuffixTree
 		}
 
 		//----------------------------------------
+		//  This goes through the N smallest suffixes (N == max_search_len) so far and updates them.
+		//  These suffixes may have occurred earlier, so we need to make sure to find them and update their latest idx's
+		//----------------------------------------
+		void update_latest_occurrences()
+		{
+			for( int start = max(0, curr_i-max_search_len+1); start <= curr_i; start++ )
+			{
+				int end = curr_i;
+
+				// walk the tree to the very last edge and edge offset
+				Node::Edge* e = root->get_edge( chars[start] );
+				int edge_offset = -1;
+
+				for( int i = start; i <= end; i++ )
+				{
+					assert( e != NULL );
+					edge_offset++;
+
+					// watch out for the implicit bound too
+					if( (e->get_sub().first+edge_offset) > min( e->get_sub().second, curr_i ) )
+					{
+						// we've ran past this edge. Need to look for the next edge
+						e = e->get_end()->get_edge( chars[i] );
+						assert( e != NULL );
+						edge_offset = 0;	// starting new edge
+					}
+					// check, not necessary
+					int first_pos = e->get_sub().first + edge_offset;
+					assert( chars[ first_pos ] == chars[i] );
+				}
+
+				int first_pos = e->get_sub().first + edge_offset;
+				assert( chars[ first_pos ] == chars[end] );
+
+				// now update the latest occurrence index
+				e->update_latest_occurrence( first_pos, end );
+				
+			}
+		}
+
+		//----------------------------------------
 		//  Returns false if all done
 		//----------------------------------------
 		bool add_next_letter()
@@ -269,6 +318,9 @@ class SuffixTree
 				rv = canonize( outer_s, outer_k, curr_i );
 				outer_s = rv.first;
 				outer_k = rv.second;
+
+				// now update the latest suffix occurrences
+				update_latest_occurrences();
 
 				curr_i++;
 				return true;
@@ -346,6 +398,74 @@ class SuffixTree
 			// compute starting position by just backtracking from last char
 			int start = last_char - j + 1;
 			return pair<int,int>( start, j );
+		}
+
+		//----------------------------------------
+		//  rv.first = index of longest match
+		//	rv.second = length of longest match
+		//	This returns the position of the LATEST occurrence of the longest, only if it's after the given min_pos
+		//	Kind of useless for our compression problem...
+		//----------------------------------------
+		pair<int,int> find_longest_match_after( const vector<T>& target, int min_pos ) const
+		{
+				Node::Edge* e = root->get_edge( target[0] );
+				if( e == NULL )
+					// that was easy
+					return pair<int,int>(-1, 0);
+
+				// walk the tree, and if we find a match that is after the min_pos, set it as the best
+				int best_pos = -1;
+				int best_len = 0;
+
+				int edge_offset = -1;
+				for( int tpos = 0; tpos < target.size(); tpos++ )
+				{
+					assert( e != NULL );
+					edge_offset++;
+
+					// are we done with the current edge?
+					// watch out for the implicit bound too
+					if( (e->get_sub().first+edge_offset) > min( e->get_sub().second, curr_i-1 ) )
+					{
+						// we've ran past this edge. Need to look for the next edge
+						e = e->get_end()->get_edge( target[tpos] );
+
+						if( e == NULL )
+							// can't find a longer match
+							break;
+
+						edge_offset = 0;	// starting new edge
+					}
+					else
+					{
+						// is this character a match?
+						int first_pos = e->get_sub().first + edge_offset;
+						if( chars[ first_pos ] != target[tpos] )
+							// nope - can't find a longer match
+							break;
+					}
+
+					// so we're at a match right now
+					// is its position after our min?
+					int first_pos = e->get_sub().first + edge_offset;
+					int latest_end = e->get_latest_occurrence( first_pos );
+					int curr_len = tpos+1;
+					int latest_start = latest_end - curr_len + 1;
+					if( latest_start >= min_pos )
+					{
+						// ok we got one! since we're going in order, this is always better
+						best_len = curr_len;
+						best_pos = latest_start;
+					}
+				}
+
+				if( best_len > 0 )
+				{
+					assert( best_len <= target.size() );
+					assert( best_pos >= min_pos );
+				}
+
+				return pair<int,int>( best_pos, best_len );
 		}
 
 #if 0

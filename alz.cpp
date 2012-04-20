@@ -2,7 +2,7 @@
 //  This is the naive "ground truth" implementation, unoptimized greedy
 //----------------------------------------
 
-#define VERBOSE
+//#define VERBOSE
 
 #include <iostream>
 #include <cmath>
@@ -97,7 +97,7 @@ int compress_main( const string& infile, const string& outfile, bool use_suffix_
 	//----------------------------------------
 	BitWriter bw;
 
-	SuffixTree stree( bytes );
+	SuffixTree stree( bytes, get_max_copy_len() );
 	vector<BYTE> target( get_max_copy_len() );
 
 	for( int i = 0; i < bytes.size(); )
@@ -120,7 +120,7 @@ int compress_main( const string& infile, const string& outfile, bool use_suffix_
 		
 		if( use_suffix_tree )
 		{
-			pair<int,int> rv = stree.find_longest_match( target );
+			pair<int,int> rv = stree.find_longest_match_after( target, pile_start );
 			longest_match = rv.first;
 			best_len = rv.second;
 			//cout << "found i = " << longest_match << " best_len = " << best_len << endl;
@@ -215,9 +215,14 @@ int decompress_main( const string& infile, const string& outfile )
 
 			size_t copy_start = out.size()-1-delta;
 			size_t copy_end = copy_start + num_bytes;
-			if( copy_start > out.size() || copy_end > out.size() )
+			if( copy_start > out.size() )
 			{
-				cerr << "Bad pointer or length for copy command #" << num_commands_read << endl;
+				cerr << "Bad pointer for copy command #" << num_commands_read << ", delta = " << delta << endl;
+				return 1;
+			}
+			if( copy_end > out.size() )
+			{
+				cerr << "Bad size for copy command #" << num_commands_read << ", nbytes = " << num_bytes << endl;
 				return 1;
 			}
 

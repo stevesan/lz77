@@ -16,7 +16,7 @@ int main( int argc, char** argv )
 		chars.push_back( argv[1][i] );
 	}
 
-	SuffixTree tree( chars );
+	SuffixTree tree( chars, 16 );
 	tree.add_all_remaining();
 	cout << "Final tree: " << endl;
 	tree.output(cout);

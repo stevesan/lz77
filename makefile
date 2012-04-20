@@ -20,19 +20,19 @@ test1 : alz
 
 test2short : alz
 	echo "mahi mahi" > mahi.txt
-	./alz s mahi.txt mahi.lzslow
-	./alz c mahi.txt mahi.lz
-	diff mahi.lz mahi.lzslow
-	./alz d mahi.lz mahi.dec.txt
-	diff mahi.txt mahi.dec.txt
+	./alz s mahi.txt mahi.s
+	./alz c mahi.txt mahi.c
+	./alz d mahi.c mahi.d
+	diff mahi.txt mahi.d
+	ls -l mahi.s mahi.c
 
 test2 : alz
 	echo "mahi mahi mahifd fd" > mahi.txt
-	./alz s mahi.txt mahi.lzslow
-	./alz c mahi.txt mahi.lz
-	diff mahi.lz mahi.lzslow
-	./alz d mahi.lz mahi.dec.txt
-	diff mahi.txt mahi.dec.txt
+	./alz s mahi.txt mahi.s
+	./alz c mahi.txt mahi.c
+	./alz d mahi.c mahi.d
+	diff mahi.txt mahi.d
+	ls -l mahi.s mahi.c
 
 test3 : alz
 	echo "mahifd fd" > test3.txt
@@ -54,15 +54,15 @@ test :
 	diff test.txt test.dec.txt
 
 test_mild :
-	./alz c config.sub config.sub.comp
-	./alz s config.sub config.sub.compslow
-#diff config.sub.comp config.sub.compslow
-	./alz d config.sub.comp config.sub.dec
-	diff config.sub config.sub.dec
+	./alz c config.sub config.sub.c
+	./alz s config.sub config.sub.s
+	./alz d config.sub.c config.sub.d
+	diff config.sub config.sub.d
+	ls -l config.sub.s config.sub.c
 
 test_heavy :
-	time ./alz c displace.bin displace.bin.comp
-	time ./alz d displace.bin.comp displace.bin.dec
-	diff displace.bin displace.bin.dec
+	./alz c work/displace.bin work/displace.bin.c
+	./alz d work/displace.bin.c work/displace.bin.d
+	diff work/displace.bin work/displace.bin.d
 
 all : alz test_suffix
