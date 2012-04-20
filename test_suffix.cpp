@@ -18,6 +18,7 @@ int main( int argc, char** argv )
 
 	SuffixTree tree( chars );
 	tree.add_all_remaining();
+	cout << "Final tree: " << endl;
 	tree.output(cout);
 
 	vector<unsigned char> target;

@@ -3,10 +3,14 @@
 //  Implementation of linear-time online suffix tree construction
 //	Algorithm from [Ukkonen 1995]
 //	Basically a port of the javascript version in view-source:http://www.allisons.org/ll/AlgDS/Tree/Suffix/
+//	In order to support a sliding window (since our pointer is limited to 12-bits), I also augmented the code
+//	to implement the extension from Jesper Larsson's thesis: http://larsson.dogma.net/thesis.pdf
 //----------------------------------------
 
 #ifndef __SUFFIXTREE_HEADER_GUARD__
 #define __SUFFIXTREE_HEADER_GUARD__
+
+//#define VERBOSE
 
 #include <vector>
 #include <cassert>
@@ -23,11 +27,9 @@ class SuffixTree
 
 		typedef pair<int, int> Substring;
 
-		static bool is_empty_sub( const Substring& s )
-		{
-			return s.second < s.first;
-		}
-
+		//----------------------------------------
+		//  Essentially represents an explicit node
+		//----------------------------------------
 		class State
 		{
 			public:
@@ -58,7 +60,6 @@ class SuffixTree
 					suf_link(NULL),
 					transitions()
 				{
-//					transitions.clear();
 				}
 
 				void add_transition( T c, const Transition& t )
@@ -114,14 +115,16 @@ class SuffixTree
 
 		};
 
+		typedef pair<State*, int> Suffix;
+
+	private:
+
 		const vector<T>& chars;
 		State* root;
 		State* bt;
 		State* outer_s;
 		int outer_k;
 		int curr_i;
-
-		typedef pair<State*, int> Suffix;
 
 		Suffix canonize( State* s, int k, int p )
 		{
@@ -206,6 +209,8 @@ class SuffixTree
 			return Suffix( s, k );
 		}
 
+	public:
+
 		SuffixTree( const vector<T>& _chars ) :
 			chars(_chars)
 		{
@@ -224,9 +229,6 @@ class SuffixTree
 			outer_s = root;
 			outer_k = 0;
 			curr_i = 0;
-
-			// TEMP
-			root->has_transition('m');
 		}
 
 		//----------------------------------------
@@ -269,6 +271,8 @@ class SuffixTree
 		//----------------------------------------
 		//  rv.first = index of longest match
 		//	rv.second = length of longest match
+		//	This returns the position of the FIRST occurence of the longest.
+		//	Kind of useless for our compression problem...
 		//----------------------------------------
 		pair<int,int> find_longest_match( const vector<T>& target ) const
 		{
@@ -321,6 +325,61 @@ class SuffixTree
 			int start = last_char - j + 1;
 			return pair<int,int>( start, j );
 		}
+
+#if 0
+		pair<int,int> find_longest_occurence_after( const vector<T>& target, int min_start ) const
+		{
+			int j = 0;	// index into target
+
+			State::MaybeTrans me = root->maybe_get_transition( target[j] );
+			int best_len = -1;
+			int best_start = -1;
+
+			while( me.first )
+			{
+				State::Transition e = me.second;
+				Substring sub = e.first;
+
+				// found a transition starting with the next letter
+				// see how much we get
+				// make sure we don't go past the edge's bound
+				// and also make sure we don't go past the current last letter
+				int i = 0;
+				for( i = sub.first; i <= sub.second && i < curr_i && j < target.size(); i++ )
+				{
+					if( chars[i] == target[j] )
+					{
+						last_char = i;
+						j++;
+					}
+					else
+						break;
+				}
+
+				// matched the whole thing?
+				if( j == target.size() )
+				{
+					break;
+				}
+
+				if( i > sub.second )
+				{
+					// we got all the way to the end of this edge!
+					// try finding the next edge
+					State* end = e.second;
+					assert( end != NULL );
+					me = end->maybe_get_transition( target[j] );
+				}
+				else
+					// didn't get to the end, we're done
+					break;
+			}
+
+			// compute starting position by just backtracking from last char
+			int start = last_char - j + 1;
+			return pair<int,int>( best_start, best_len );
+		}
+#endif
 };
 
 

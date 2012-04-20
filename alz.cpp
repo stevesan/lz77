@@ -2,6 +2,8 @@
 //  This is the naive "ground truth" implementation, unoptimized greedy
 //----------------------------------------
 
+// #define VERBOSE
+
 #include <iostream>
 #include <cmath>
 #include <vector>
@@ -136,7 +138,9 @@ int compress_main( const string& infile, const string& outfile, bool use_suffix_
 			unsigned int delta = i - longest_match - 1;
 			bw.write_bits( delta, NUM_DELTA_BITS );
 			bw.write_bits( best_len, NUM_LEN_BITS );
+#ifdef VERBOSE
 			cout << "copy " << delta << " " << best_len << endl;
+#endif
 
 			// advance cursor past the length
 			i += best_len;
@@ -156,7 +160,9 @@ int compress_main( const string& infile, const string& outfile, bool use_suffix_
 			bw.write_bit( 0 );
 			bw.write_bits( bytes[i], 8 );
 
+#ifdef VERBOSE
 			cout << "byte " << bytes[i] << endl;
+#endif
 
 			// advance cursor and suffix tree
 			i++;
