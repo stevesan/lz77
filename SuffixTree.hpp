@@ -15,6 +15,7 @@
 #include <vector>
 #include <cassert>
 #include <utility>
+#include <map>
 #include <boost/unordered_map.hpp>
 #include <boost/foreach.hpp>
 
@@ -30,21 +31,65 @@ class SuffixTree
 		//----------------------------------------
 		//  Essentially represents an explicit node
 		//----------------------------------------
-		class State
+		class Node
 		{
 			public:
-				typedef pair< Substring, State* > Transition;
-				typedef boost::unordered_map< T, Transition > TransMap;
+
+				class Edge
+				{
+						Substring sub;
+						Node* end;
+						map< int, int > latest_occurr;
+
+					public:
+
+						Edge( Substring& _sub, Node* _end ) :
+							sub(_sub),
+							end( _end )
+						{
+						}
+
+						Node* get_end() { return end; }
+						const Node* get_end_const() const { return end; }
+						Substring get_sub() const { return sub; }
+
+						//----------------------------------------
+						//  Returns the index of the latest occurrence of the implicit node (ie. a substring) given by the first occurrence index 'first_idx'
+						//----------------------------------------
+						int get_latest_occurrence( int first_idx )
+						{
+							assert( first_idx >= sub.first );
+							assert( first_idx <= sub.second );
+
+							map<int,int>::iterator it = latest_occurr.find( first_idx );
+							if( it != latest_occurr.end() )
+							{
+								return it->second;
+							}
+							else
+								// there has only been one occurrence so far
+								return first_idx;
+						}
+
+						void update_latest_occurrence( int first_idx, int latest_idx )
+						{
+							// make sure it's actually later
+							if( latest_idx > get_latest_occurrence(first_idx) )
+								latest_occurr[ first_idx ] = latest_idx;
+						}
+				};
+
+				typedef boost::unordered_map< T, Edge* > EdgeMap;
 
 		private:
-				TransMap transitions;
+				EdgeMap edges;
 				bool is_leaf;
 
 		public:
 
-				static void output_trans( ostream& os, const vector<T>& chars, int last, const Transition& e )
+				static void output_trans( ostream& os, const vector<T>& chars, int last, const Edge* e )
 				{
-					Substring sub = e.first;
+					Substring sub = e->get_sub();
 					os << sub.first << "-" << sub.second << " '";
 					for( int i = sub.first; i <= sub.second && i <= last; i++ )
 					{
@@ -53,89 +98,66 @@ class SuffixTree
 					os << "'";
 				}
 
-				State* suf_link;
+				Node* suf_link;
 
-				State() :
+				Node() :
 					is_leaf( true ),
 					suf_link(NULL),
-					transitions()
+					edges()
 				{
 				}
 
-				void add_transition( T c, const Transition& t )
+				void add_edge( T c, Edge* t )
 				{
-					assert( t.second != NULL );
+					assert( t->get_end() != NULL );
 					//cout << "Adding transition for " << c << " obj = " << (void*)this << endl;
-					transitions[ c ] = t;
+					edges[ c ] = t;
 					is_leaf = false;
 				}
 
-				typedef pair<bool, Transition> MaybeTrans;
-				MaybeTrans maybe_get_transition( T c )
+				Edge* get_edge( T c )
 				{
-					TransMap::iterator iter = transitions.find(c);
-					if( iter == transitions.end() )
-						return MaybeTrans( false, Transition(Substring(0,0), NULL) );
-					else
-						return MaybeTrans( true, transitions[c] );
-				}
-
-				bool has_transition( T c )
-				{
-					//cout << "Looking for transition to " << c << " |ts| = " << transitions.size() << " obj = " << (void*)this << endl;
-					bool found = transitions.find(c) != transitions.end();
-					//cout << "result = " << found << endl;
-					return found;
-				}
-
-				Transition get_transition( T c )
-				{
-					if( !has_transition(c) )
-					{
-						cerr << "Could not find transition for " << c << endl;
-						assert(false);
-					}
-					return transitions[c];
+					return edges[c];
 				}
 
 				void output_dfs( ostream& os, const vector<T>& chars, int last, int depth ) const
 				{
 
-					BOOST_FOREACH( const TransMap::value_type& kv, transitions )
+					BOOST_FOREACH( const EdgeMap::value_type& kv, edges )
 					{
-						const Transition& e = kv.second;
+						const Edge* e = kv.second;
 						os << depth << " ";
 						for( int i = 0; i < depth; i++ ) cout << " ";
 						output_trans( os, chars, last, e );
 						os << endl;
-						e.second->output_dfs( os, chars, last, depth+1 );
+						e->get_end_const()->output_dfs( os, chars, last, depth+1 );
 					}
 
 				}
 
 		};
 
-		typedef pair<State*, int> Suffix;
+		typedef pair<Node*, int> Suffix;
 
 	private:
 
 		const vector<T>& chars;
-		State* root;
-		State* bt;
-		State* outer_s;
+		Node* root;
+		Node* bt;
+		Node* outer_s;
 		int outer_k;
 		int curr_i;
 
-		Suffix canonize( State* s, int k, int p )
+		Suffix canonize( Node* s, int k, int p )
 		{
 			if( p < k )
 				return Suffix( s, k );
 
-			State::Transition e = s->get_transition( chars[k] );
-			assert( e.second != NULL );
-			State* s1 = e.second;
-			int k1 = e.first.first;
-			int p1 = e.first.second;
+			Node::Edge* e = s->get_edge( chars[k] );
+			assert( e != NULL );
+			Node* s1 = e->get_end();
+			int k1 = e->get_sub().first;
+			int p1 = e->get_sub().second;
 
 			while( (p1-k1) <= (p-k) )
 			{
@@ -143,55 +165,56 @@ class SuffixTree
 					s = s1;
 					if( k <= p )
 					{
-						e = s->get_transition( chars[k] );
-						assert( e.second != NULL );
-						s1 = e.second;
-						k1 = e.first.first;
-						p1 = e.first.second;
+						e = s->get_edge( chars[k] );
+						assert( e != NULL );
+						s1 = e->get_end();
+						k1 = e->get_sub().first;
+						p1 = e->get_sub().second;
 					}
 			}
 
 			return Suffix( s, k );
 		}
 
-		typedef pair<bool,State*> TestSplitRet;
-		TestSplitRet test_and_split( State* s, int k, int p, T t )
+		typedef pair<bool,Node*> TestSplitRet;
+		TestSplitRet test_and_split( Node* s, int k, int p, T t )
 		{
 			if( k <= p )
 			{
 				//cout << "Looking for " << chars[k] << endl;
-				State::Transition e = s->get_transition( chars[k] );
-				State* s1 = e.second;
+				Node::Edge* e = s->get_edge( chars[k] );
+				assert( e != NULL );
+				Node* s1 = e->get_end();
 				assert( s1 != NULL );
-				int k1 = e.first.first;
-				int p1 = e.first.second;
+				int k1 = e->get_sub().first;
+				int p1 = e->get_sub().second;
 
 				if( t == chars[ k1+p-k+1 ] )
 					return TestSplitRet( true, s );
 				else
 				{
-					State* r = new State();
-					s->add_transition( chars[k1], State::Transition( Substring(k1, k1+p-k), r) );
-					r->add_transition( chars[k1+p-k+1], State::Transition( Substring( k1+p-k+1, p1 ), s1) );
+					Node* r = new Node();
+					s->add_edge( chars[k1], new Node::Edge( Substring(k1, k1+p-k), r ) );
+					r->add_edge( chars[k1+p-k+1], new Node::Edge( Substring( k1+p-k+1, p1 ), s1) );
 					return TestSplitRet( false, r );
 				}
 			}
 			else
-				return TestSplitRet( s->has_transition(t), s );
+				return TestSplitRet( s->get_edge(t) != NULL, s );
 		}
 
-		Suffix update( State* s, int k, int i )
+		Suffix update( Node* s, int k, int i )
 		{
-			State* oldr = root;
+			Node* oldr = root;
 			TestSplitRet tsr = test_and_split( s, k, i-1, chars[i] );
 			bool is_end = tsr.first;
-			State* r = tsr.second;
+			Node* r = tsr.second;
 
 			int inf = chars.size();
 
 			while( !is_end )
 			{
-				r->add_transition( chars[i], State::Transition( Substring(i, inf), new State() ) );
+				r->add_edge( chars[i], new Node::Edge( Substring(i, inf), new Node() ) );
 				if( oldr != root )
 					oldr->suf_link = r;
 
@@ -214,14 +237,14 @@ class SuffixTree
 		SuffixTree( const vector<T>& _chars ) :
 			chars(_chars)
 		{
-			root = new State();
-			bt = new State();
+			root = new Node();
+			bt = new Node();
 
-			// create transitions for all posible chars..
+			// create edges for all posible chars..
 			for( int i = 0; i < chars.size(); i++ )
 			{
-				bt->add_transition( chars[i],
-						State::Transition( Substring(i,i), root) );
+				bt->add_edge( chars[i],
+						new Node::Edge( Substring(i,i), root ) );
 				//cout << "Added bt-> root transition for char '" << chars[i] << "'" << endl;
 			}
 
@@ -278,13 +301,12 @@ class SuffixTree
 		{
 			int j = 0;	// index into target
 
-			State::MaybeTrans me = root->maybe_get_transition( target[j] );
+			Node::Edge* e = root->get_edge( target[j] );
 			int last_char = -1;	// the last char we matched
 
-			while( me.first )
+			while( e != NULL )
 			{
-				State::Transition e = me.second;
-				Substring sub = e.first;
+				Substring sub = e->get_sub();
 
 				// found a transition starting with the next letter
 				// see how much we get
@@ -312,9 +334,9 @@ class SuffixTree
 				{
 					// we got all the way to the end of this edge!
 					// try finding the next edge
-					State* end = e.second;
+					Node* end = e->get_end();
 					assert( end != NULL );
-					me = end->maybe_get_transition( target[j] );
+					e = end->get_edge( target[j] );
 				}
 				else
 					// didn't get to the end, we're done
@@ -331,13 +353,13 @@ class SuffixTree
 		{
 			int j = 0;	// index into target
 
-			State::MaybeTrans me = root->maybe_get_transition( target[j] );
+			Node::MaybeTrans me = root->maybe_get_transition( target[j] );
 			int best_len = -1;
 			int best_start = -1;
 
 			while( me.first )
 			{
-				State::Transition e = me.second;
+				Node::Transition e = me.second;
 				Substring sub = e.first;
 
 				// found a transition starting with the next letter
@@ -366,7 +388,7 @@ class SuffixTree
 				{
 					// we got all the way to the end of this edge!
 					// try finding the next edge
-					State* end = e.second;
+					Node* end = e.second;
 					assert( end != NULL );
 					me = end->maybe_get_transition( target[j] );
 				}

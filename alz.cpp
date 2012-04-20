@@ -2,7 +2,7 @@
 //  This is the naive "ground truth" implementation, unoptimized greedy
 //----------------------------------------
 
-// #define VERBOSE
+#define VERBOSE
 
 #include <iostream>
 #include <cmath>
